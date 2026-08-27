@@ -11,14 +11,30 @@ Corridor → Bathroom → Corridor → Balcony → straight back to the Exterior
 the contact finale. Bedroom, Kitchen and Bathroom each walk back out to the
 corridor (reverse walk-out) before moving on.
 
-## Run
+## Setup & Run
 
+### 1. Install Dependencies
 ```bash
 npm install
+```
+
+### 2. Setup Environment Variables
+```bash
+# Copy the example env file
+cp .env.example .env.local
+```
+Then open `.env.local` and replace with your MongoDB credentials:
+```env
+MONGODB_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@YOUR_CLUSTER.mongodb.net/duro-automation?retryWrites=true&w=majority
+```
+
+> **Get your MongoDB URI:** Go to [MongoDB Atlas](https://www.mongodb.com/atlas) → Create free cluster → Connect → Drivers → Copy connection string
+
+### 3. Run the Project
+```bash
 npm run dev              # http://localhost:3000
 npm run build            # production build
 npm run optimize-images  # rebuild public/images from Downloads sources
-node scripts/generate-depth.mjs  # regenerate AI depth maps (downloads model once)
 ```
 
 ## How it works
