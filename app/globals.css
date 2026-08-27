@@ -1,0 +1,175 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: auto;
+}
+
+/* ---------- industries marquee (right → left, seamless loop) ---------- */
+@keyframes marquee-ltr {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  animation: marquee-ltr 38s linear infinite;
+  will-change: transform;
+}
+
+@media (hover: hover) {
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* ---------- partners marquee (left → right, seamless loop) ---------- */
+@keyframes marquee-rtl {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
+.marquee-track-right {
+  animation: marquee-rtl 44s linear infinite;
+  will-change: transform;
+}
+
+@media (hover: hover) {
+  .marquee:hover .marquee-track-right {
+    animation-play-state: paused;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track-right {
+    animation: none;
+  }
+}
+
+html,
+body {
+  background: #000;
+  overscroll-behavior: none;
+}
+
+::selection {
+  background: rgba(200, 162, 95, 0.35);
+  color: #fff;
+}
+
+/* ---------- cinematic overlays ---------- */
+
+.film-grain {
+  position: fixed;
+  inset: -100px;
+  pointer-events: none;
+  z-index: 30;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain 1.6s steps(3) infinite;
+  will-change: transform;
+}
+
+@keyframes grain {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-38px, 22px); }
+  50% { transform: translate(24px, -30px); }
+  75% { transform: translate(-14px, -18px); }
+  100% { transform: translate(0, 0); }
+}
+
+.cine-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 29;
+  background:
+    radial-gradient(ellipse 130% 105% at 50% 48%, transparent 58%, rgba(0, 0, 0, 0.42) 100%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.38), transparent 12%, transparent 88%, rgba(0, 0, 0, 0.45));
+}
+
+/* ---------- steam (bathroom) ---------- */
+
+.steam-wisp {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(42px);
+  background: radial-gradient(circle, rgba(255, 244, 228, 0.30), transparent 70%);
+  animation: steam-rise 9s ease-in-out infinite;
+}
+
+@keyframes steam-rise {
+  0% { transform: translateY(12%) translateX(0) scale(1); opacity: 0; }
+  25% { opacity: 0.75; }
+  60% { opacity: 0.5; }
+  100% { transform: translateY(-55%) translateX(8%) scale(1.35); opacity: 0; }
+}
+
+/* ---------- scroll hint ---------- */
+
+@keyframes hint-drop {
+  0% { transform: translateY(0); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(14px); opacity: 0; }
+}
+
+.hint-dot {
+  animation: hint-drop 1.8s ease-in-out infinite;
+}
+
+/* ---------- pulsing chip dot ---------- */
+
+@keyframes chip-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 162, 95, 0.55); }
+  50% { box-shadow: 0 0 0 5px rgba(200, 162, 95, 0); }
+}
+
+.chip-dot {
+  animation: chip-pulse 2.2s ease-in-out infinite;
+}
+
+/* ---------- smart-home controller (live 2D dashboard) ---------- */
+@keyframes duro-fan { to { transform: rotate(360deg); } }
+.duro-fan { animation: duro-fan 1.25s linear infinite; transform-origin: 50% 50%; }
+
+@keyframes duro-eq { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+.duro-eq { animation: duro-eq 0.85s ease-in-out infinite; transform-origin: bottom; }
+
+@keyframes duro-scan { 0% { transform: translateY(-120%); } 100% { transform: translateY(820%); } }
+.duro-scan { animation: duro-scan 3s linear infinite; }
+
+@keyframes duro-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.duro-rec { animation: duro-rec 1.1s ease-in-out infinite; }
+
+@keyframes duro-ping2 { 0% { transform: scale(0.9); opacity: 0.7; } 80%, 100% { transform: scale(2.2); opacity: 0; } }
+.duro-ping2 { animation: duro-ping2 1.8s ease-out infinite; }
+
+@keyframes duro-dashmove { to { stroke-dashoffset: -14; } }
+.duro-dash { animation: duro-dashmove 0.9s linear infinite; }
+
+@keyframes duro-node { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.duro-node { animation: duro-node 2.1s ease-in-out infinite; }
+
+@keyframes duro-float2 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.duro-float2 { animation: duro-float2 4s ease-in-out infinite; }
+
+@keyframes duro-cool { 0% { transform: translateY(-2px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateY(18px); opacity: 0; } }
+.duro-cool { animation: duro-cool 2s ease-in infinite; }
+
+@keyframes duro-wave { 0% { transform: scale(0.98); opacity: 0; } 12% { opacity: 0.9; } 100% { transform: scale(1.6); opacity: 0; } }
+.duro-wave { animation: duro-wave 2.1s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .duro-fan, .duro-eq, .duro-scan, .duro-rec, .duro-ping2, .duro-dash, .duro-node, .duro-float2, .duro-cool, .duro-wave { animation: none; }
+}
+
+/* ---------- hide next.js dev overlay ---------- */
+nextjs-portal {
+  display: none !important;
+}

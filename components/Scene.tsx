@@ -1,0 +1,678 @@
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useTexture } from "@react-three/drei";
+import { ROOMS, DWELL, N_SEG, TOTAL_P } from "@/lib/journey";
+import { useJourney, pointerState } from "@/lib/store";
+
+const VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+/**
+ * Depth-parallax room shader with cinematic fly-through transitions.
+ * - Depth reprojection: near pixels magnify/drift faster than far ones,
+ *   so a dolly reads as physical camera travel.
+ * - uStreak: zoom motion-blur along the dolly ray (the fly-through feel).
+ * - uFade: full-frame opacity — the room handoff happens at peak motion,
+ *   hidden inside the streaks. No masks, no visible seams.
+ */
+const FRAG = /* glsl */ `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uMap;
+uniform sampler2D uDepth;
+uniform float uImageAspect;
+uniform float uViewAspect;
+uniform float uDollyN;   // magnification of the nearest depth
+uniform float uDollyF;   // magnification of the farthest depth
+uniform float uStreak;   // zoom-blur strength along the dolly ray
+uniform float uFade;     // layer opacity
+uniform float uBright;
+uniform float uTime;
+uniform float uVig;
+uniform vec2 uCenter;    // screen-space dolly target (the doorway)
+uniform vec2 uMove;      // lateral camera drift, texture units
+
+vec2 cover(vec2 uv) {
+  if (uViewAspect > uImageAspect) {
+    return vec2(uv.x, 0.5 + (uv.y - 0.5) * (uImageAspect / uViewAspect));
+  }
+  return vec2(0.5 + (uv.x - 0.5) * (uViewAspect / uImageAspect), uv.y);
+}
+
+void main() {
+  vec2 suv = vUv;
+  vec2 uv0 = cover(suv);
+  vec2 c = cover(uCenter);
+
+  // iterative depth reprojection: near magnifies + drifts more than far
+  // 2 iterations is enough — 3 was overkill and doubled GPU cost
+  vec2 uv = uv0;
+  for (int i = 0; i < 2; i++) {
+    float dep = texture2D(uDepth, uv).r;
+    float mag = mix(uDollyF, uDollyN, dep);
+    uv = c + (uv0 - c) / mag + uMove * (dep - 0.35);
+  }
+  uv = clamp(uv, 0.002, 0.998);
+
+  vec3 col;
+  if (uStreak > 0.001) {
+    // zoom motion-blur: 5 samples (halved from 10 — imperceptible quality
+    // difference but half the texture lookups per pixel)
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 5; i++) {
+      float k = (float(i) / 4.0 - 0.5) * uStreak;
+      vec2 p = c + (uv - c) * (1.0 + k);
+      acc += texture2D(uMap, clamp(p, 0.002, 0.998)).rgb;
+    }
+    col = acc * 0.2;
+  } else {
+    col = texture2D(uMap, uv).rgb;
+  }
+
+  // focus vignette while moving through a doorway
+  vec2 dvec = (suv - uCenter) * vec2(uViewAspect, 1.0);
+  float d = length(dvec);
+  col *= 1.0 - 0.32 * uVig * smoothstep(0.25, 1.15, d);
+  col *= uBright;
+
+  gl_FragColor = vec4(col, uFade);
+}
+`;
+
+/**
+ * Walking-clip shader: cover-fit video with a bottom crop (removes the
+ * generator watermark), a small safety zoom, and pointer-only drift so the
+ * frame is perfectly still whenever the visitor isn't scrolling.
+ */
+const VIDEO_FRAG = /* glsl */ `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uMap;
+uniform float uAspect;      // aspect of the cropped video region
+uniform float uViewAspect;
+uniform float uZoom;
+uniform float uFade;
+uniform float uBright;
+uniform float uCropY;       // fraction of the video bottom to discard
+uniform vec2 uMove;
+
+void main() {
+  vec2 suv = vUv;
+  vec2 uv;
+  if (uViewAspect > uAspect) {
+    uv = vec2(suv.x, 0.5 + (suv.y - 0.5) * (uAspect / uViewAspect));
+  } else {
+    uv = vec2(0.5 + (suv.x - 0.5) * (uViewAspect / uAspect), suv.y);
+  }
+  uv = vec2(0.5) + (uv - vec2(0.5)) / uZoom + uMove;
+  uv = clamp(uv, 0.002, 0.998);
+  uv.y = uCropY + uv.y * (1.0 - uCropY);
+  vec3 col = texture2D(uMap, uv).rgb * uBright;
+  gl_FragColor = vec4(col, uFade);
+}
+`;
+
+const smooth01 = (x: number) => {
+  const t = Math.min(Math.max(x, 0), 1);
+  return t * t * (3 - 2 * t);
+};
+
+const COLOR_URLS = ROOMS.map((r) => "/images/" + r.file);
+const DEPTH_URLS = ROOMS.map(
+  (r) => "/images/depth/" + r.file.replace(".jpg", "-depth.png")
+);
+
+/** Bottom fraction of each clip discarded — 0 because prep-clips crops the
+ * watermark at encode time; raise only for clips served unprocessed */
+const CLIP_CROP_Y = 0;
+
+type ClipEntry = {
+  room: number;
+  video: HTMLVideoElement;
+  texture: THREE.VideoTexture;
+  material: THREE.ShaderMaterial;
+  /** Frame index currently requested / being seeked */
+  seekingFrame: number;
+  /** Frame index that has successfully completed seeked & uploaded to GPU */
+  lastSeekedFrame: number;
+  /** Last frame index the decoder actually PRESENTED (tracked via rVFC) */
+  presentedFrame: number;
+  /** Allowed display direction this frame: +1 forward, -1 reverse, 0 unknown */
+  dispDir: number;
+  /** Frames since the last accepted present — stall fallback so it can't freeze */
+  staleFrames: number;
+};
+
+/** all clips are encoded at this frame rate (see scripts/prep-clips.mjs) */
+const CLIP_FPS = 24;
+
+/**
+ * Decode-glitch guard. A scrubbed <video> occasionally PRESENTS a stale/earlier
+ * decoded frame for a single tick even though currentTime never went backward —
+ * on a high-contrast clip that reads as a flash (the closed gate, the corridor
+ * you just left). We drive the texture upload off requestVideoFrameCallback and
+ * REJECT any presented frame that moves against the clip's current display
+ * direction, so a glitch frame is never uploaded to the GPU — the last good
+ * frame simply holds for that tick.
+ */
+function registerPresentGuard(entry: ClipEntry) {
+  const v = entry.video as HTMLVideoElement & {
+    requestVideoFrameCallback?: (
+      cb: (now: number, md: { mediaTime: number }) => void
+    ) => number;
+  };
+  if (typeof v.requestVideoFrameCallback !== "function") {
+    // Older browsers without rVFC: plain seeked-driven upload (no glitch guard).
+    v.addEventListener("seeked", () => {
+      entry.presentedFrame = entry.seekingFrame;
+      if (entry.lastSeekedFrame < 0) entry.lastSeekedFrame = entry.seekingFrame;
+      entry.staleFrames = 0;
+      entry.texture.needsUpdate = true;
+    });
+    return;
+  }
+  const onPresent = (_now: number, md: { mediaTime: number }) => {
+    const fr = Math.round(md.mediaTime * CLIP_FPS);
+    const dir = entry.dispDir;
+    const prev = entry.presentedFrame;
+    // accept only if it moves WITH the current direction (or first / unknown);
+    // a frame against the direction is a decoder glitch — drop it, hold the last
+    const ok =
+      prev < 0 || dir === 0 || (dir > 0 ? fr >= prev - 1 : fr <= prev + 1);
+    if (ok) {
+      entry.presentedFrame = fr;
+      if (entry.lastSeekedFrame < 0) entry.lastSeekedFrame = fr;
+      entry.staleFrames = 0;
+      entry.texture.needsUpdate = true;
+    }
+    v.requestVideoFrameCallback!(onPresent);
+  };
+  v.requestVideoFrameCallback(onPresent);
+}
+
+export default function Scene() {
+  const colorMaps = useTexture(COLOR_URLS);
+  const depthMaps = useTexture(DEPTH_URLS);
+  const { viewport } = useThree();
+
+  useMemo(() => {
+    colorMaps.forEach((t) => {
+      t.colorSpace = THREE.NoColorSpace;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.minFilter = THREE.LinearFilter;
+      t.magFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      t.needsUpdate = true;
+    });
+    depthMaps.forEach((t) => {
+      t.colorSpace = THREE.NoColorSpace;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.minFilter = THREE.LinearFilter;
+      t.magFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      t.needsUpdate = true;
+    });
+  }, [colorMaps, depthMaps]);
+
+  const materials = useMemo(
+    () =>
+      ROOMS.map(
+        (r, i) =>
+          new THREE.ShaderMaterial({
+            vertexShader: VERT,
+            fragmentShader: FRAG,
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            uniforms: {
+              uMap: { value: colorMaps[i] },
+              uDepth: { value: depthMaps[i] },
+              uImageAspect: { value: 1.5 },
+              uViewAspect: { value: 1.7 },
+              uDollyN: { value: 1.045 },
+              uDollyF: { value: 1.03 },
+              uStreak: { value: 0 },
+              uFade: { value: 1 },
+              uBright: { value: 1 },
+              uTime: { value: 0 },
+              uVig: { value: 0 },
+              uCenter: { value: new THREE.Vector2(r.portal[0], r.portal[1]) },
+              uMove: { value: new THREE.Vector2(0, 0) },
+            },
+          })
+      ),
+    [colorMaps, depthMaps]
+  );
+
+  /** Scroll-scrubbed walking clips — one per segment that has one */
+  const clips = useMemo<ClipEntry[]>(() => {
+    if (typeof document === "undefined") return [];
+    return ROOMS.flatMap((r, i) => {
+      if (!r.clip) return [];
+      const video = document.createElement("video");
+      video.src = r.clip;
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "auto";
+      const texture = new THREE.VideoTexture(video);
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      // decode the first frame so the layer is ready before it fades in
+      video.addEventListener(
+        "loadeddata",
+        () => {
+          try {
+            video.currentTime = 0.03;
+          } catch {}
+        },
+        { once: true }
+      );
+      video.load();
+      const material = new THREE.ShaderMaterial({
+        vertexShader: VERT,
+        fragmentShader: VIDEO_FRAG,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        uniforms: {
+          uMap: { value: texture },
+          uAspect: { value: 1.64 },
+          uViewAspect: { value: 1.7 },
+          uZoom: { value: 1.045 },
+          uFade: { value: 0 },
+          uBright: { value: 1 },
+          uCropY: { value: CLIP_CROP_Y },
+          uMove: { value: new THREE.Vector2(0, 0) },
+        },
+      });
+      const entry: ClipEntry = {
+        room: i,
+        video,
+        texture,
+        material,
+        seekingFrame: -1,
+        lastSeekedFrame: -1,
+        presentedFrame: -1,
+        dispDir: 0,
+        staleFrames: 0,
+      };
+      registerPresentGuard(entry);
+      return [entry];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      (window as unknown as Record<string, unknown>).__clips = clips;
+      (window as unknown as Record<string, unknown>).__mat0 = materials[0];
+    }
+    // restore any video torn down by a previous unmount (StrictMode remount
+    // preserves the memoized clip objects but the cleanup below emptied them)
+    clips.forEach((c) => {
+      c.seekingFrame = -1;
+      c.lastSeekedFrame = -1;
+      c.presentedFrame = -1;
+      c.staleFrames = 0;
+      if (!c.video.src) {
+        c.video.src = ROOMS[c.room].clip!;
+        c.video.addEventListener(
+          "loadeddata",
+          () => {
+            try {
+              c.video.currentTime = 0.03;
+            } catch {}
+          },
+          { once: true }
+        );
+        c.video.load();
+        registerPresentGuard(c);
+      }
+    });
+    return () => {
+      clips.forEach((c) => {
+        c.video.pause();
+        c.video.removeAttribute("src");
+        c.video.load();
+        c.texture.dispose();
+        c.material.dispose();
+      });
+    };
+  }, [clips]);
+
+  const meshes = useRef<(THREE.Mesh | null)[]>([]);
+  const clipMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  const par = useRef({ x: 0, y: 0 });
+  const renderP = useRef(0);
+  const prevP = useRef(0);
+  const scrollVel = useRef(0);
+  const revHold = useRef(0);
+  const fwdHold = useRef(0);
+  const scrollDir = useRef(1);
+
+  useFrame((state, delta) => {
+    const t = state.clock.elapsedTime;
+    // clamp delta so a throttled/background tab can't fling the smoothers
+    const dt = Math.min(delta, 1 / 20);
+
+    // Light render-side low-pass on scroll progress (~40ms time constant).
+    const rawP = useJourney.getState().progress;
+    renderP.current += (rawP - renderP.current) * (1 - Math.exp(-dt / 0.04));
+    const P = renderP.current;
+    const s = Math.min(Math.floor(P), N_SEG - 1);
+
+    // Smoothed scroll velocity (progress units/sec).
+    const instV = dt > 0 ? (P - prevP.current) / dt : 0;
+    scrollVel.current += (instV - scrollVel.current) * (1 - Math.exp(-dt / 0.12));
+    prevP.current = P;
+    const vel = scrollVel.current;
+
+    // SYMMETRIC anti-flash ratchet — the persistent sustained scroll DIRECTION.
+    // It only flips after the scroll has clearly gone one way for >=4 consecutive
+    // frames, so no brief input drift/jitter (any magnitude) can flip it. A clip
+    // frame may then travel ONLY along this direction — backward flashes are
+    // impossible scrolling DOWN and forward flashes impossible scrolling UP. A
+    // deliberate direction change sustains and flips it normally.
+    const CLIP_DIR_VEL = 0.12; // progress-units/sec to count as real intent
+    fwdHold.current = vel >= CLIP_DIR_VEL ? fwdHold.current + 1 : 0;
+    revHold.current = vel <= -CLIP_DIR_VEL ? revHold.current + 1 : 0;
+    if (fwdHold.current >= 4) scrollDir.current = 1;
+    else if (revHold.current >= 4) scrollDir.current = -1;
+
+    const aSway = 1 - Math.exp(-dt / 0.32);
+    const targetX = pointerState.x * 0.005;
+    const targetY = pointerState.y * 0.004;
+    par.current.x += (targetX - par.current.x) * aSway;
+    par.current.y += (targetY - par.current.y) * aSway;
+
+    // is the current segment walked by a video clip? is it part of a chain?
+    const segV = Math.min(Math.max(P - s, 0), 1);
+    const clipReady = clips.some(
+      (c) => c.room === s && c.video.readyState >= 2
+    );
+    const prevClipReady = clips.some(
+      (c) => c.room === s - 1 && c.video.readyState >= 2
+    );
+    const nextClipReady = clips.some(
+      (c) => c.room === s + 1 && c.video.readyState >= 2
+    );
+    const revSeg = s > 0 && !!ROOMS[s - 1]?.reverseOut;
+
+    materials.forEach((mat, i) => {
+      const mesh = meshes.current[i];
+      if (!mesh) return;
+      const visible = i === s || i === s + 1;
+      mesh.visible = visible;
+      if (!visible) return;
+
+      const room = ROOMS[i];
+      const bz = room.baseZoom ?? 1;
+      const ds = room.dollyScale ?? 1;
+      const sw = room.swayScale ?? 1;
+
+      const u = mat.uniforms;
+      const img: { width?: number; height?: number } | undefined = (
+        u.uMap.value as THREE.Texture
+      ).image;
+      if (img?.width && img?.height) u.uImageAspect.value = img.width / img.height;
+      u.uViewAspect.value = viewport.aspect;
+      u.uTime.value = t;
+      (u.uMove.value as THREE.Vector2).set(
+        par.current.x * sw,
+        -par.current.y * sw
+      );
+
+      const v = Math.min(Math.max(P - s, 0), 1);
+
+      if (i === s) {
+        if (i === 0) {
+          const breath = Math.sin(Math.PI * v);
+          u.uDollyN.value = bz * (1.045 + 0.055 * ds * breath);
+          u.uDollyF.value = bz * (1.03 + 0.018 * ds * breath);
+          u.uStreak.value = 0;
+          u.uFade.value = 1;
+          u.uBright.value = 1;
+          u.uVig.value = 0;
+        } else if (clipReady) {
+          const k = Math.min(v / DWELL, 1);
+          u.uDollyN.value = bz * (1.045 + 0.04 * ds * smooth01(k));
+          u.uDollyF.value = bz * (1.03 + 0.01 * ds * smooth01(k));
+          u.uStreak.value = 0;
+          u.uFade.value = prevClipReady
+            ? 0
+            : 1 - smooth01((v - DWELL - 0.02) / 0.1);
+          u.uBright.value = 1;
+          u.uVig.value = 0;
+        } else if (v < DWELL) {
+          const k = v / DWELL;
+          u.uDollyN.value = bz * (1.045 + 0.1 * ds * k);
+          u.uDollyF.value = bz * (1.03 + 0.022 * ds * k);
+          u.uStreak.value = 0;
+          u.uFade.value = 1;
+          u.uBright.value = 1;
+          u.uVig.value = 0;
+        } else {
+          const q = (v - DWELL) / (1 - DWELL);
+          const push = smooth01(q);
+          u.uDollyN.value = bz * (1.045 + 0.1 * ds + 0.6 * ds * push);
+          u.uDollyF.value = bz * (1.03 + 0.022 * ds + 0.22 * ds * push);
+          u.uStreak.value = 0;
+          u.uFade.value = 1 - smooth01((q - 0.55) / 0.37);
+          u.uBright.value = 1 + 0.06 * smooth01((q - 0.3) / 0.4);
+          u.uVig.value = q;
+        }
+      } else {
+        if (clipReady) {
+          u.uDollyN.value = bz * 1.045;
+          u.uDollyF.value = bz * 1.03;
+          u.uStreak.value = 0;
+          u.uFade.value = 1;
+          u.uBright.value = 0.9 + 0.1 * smooth01((v - 0.7) / 0.28);
+          u.uVig.value = 0;
+        } else if (revSeg && i === s + 1) {
+          const a = smooth01((v - 0.88) / 0.12);
+          u.uDollyN.value = bz * (1.06 - 0.015 * a);
+          u.uDollyF.value = bz * (1.038 - 0.008 * a);
+          u.uStreak.value = 0;
+          u.uFade.value = 1;
+          u.uBright.value = 1;
+          u.uVig.value = 0;
+        } else {
+          const settle = smooth01(v);
+          u.uDollyN.value = bz * (1.045 + 0.16 * (1 - settle));
+          u.uDollyF.value = bz * (1.03 + 0.05 * (1 - settle));
+          u.uStreak.value = 0;
+          u.uFade.value = 1;
+          u.uBright.value = 0.7 + 0.3 * smooth01((v - 0.5) / 0.45);
+          u.uVig.value = 0;
+        }
+        if (i === ROOMS.length - 1 && P > N_SEG) {
+          const f = Math.min((P - N_SEG) / (TOTAL_P - N_SEG), 1);
+          u.uDollyN.value = bz * (1.045 + 0.06 * f);
+          u.uDollyF.value = bz * (1.03 + 0.015 * f);
+          u.uBright.value = 1 - 0.25 * smooth01((f - 0.15) / 0.6);
+          u.uStreak.value = 0;
+        }
+      }
+
+      // Presence lighting — the HALL brightens when you're in it, easing back
+      // to normal (the corridor's brightness, 1.0) as you leave. Corridors stay
+      // bright. Values match at every handoff → no brightness flicker.
+      if (i === 2) {
+        const presence = 1 - smooth01((Math.abs(P - 2) - 0.15) / 0.6);
+        u.uBright.value = 1 + 0.25 * presence;
+      }
+    });
+
+    // drive the walking clips — scrubbed purely by scroll progress.
+    clips.forEach((c, idx) => {
+      const mesh = clipMeshes.current[idx];
+      if (!mesh) return;
+      const ready = c.video.readyState >= 2;
+      const u = c.material.uniforms;
+      const dur = c.video.duration || 5;
+
+      // Texture uploads are driven by registerPresentGuard() (rVFC) — it rejects
+      // any decoder glitch frame so one can never reach the screen. The per-frame
+      // dispDir it needs is set just below, after the ratchet.
+
+      const clipReverseOut = !!ROOMS[c.room]?.reverseOut;
+      const isPrimary = c.room === s && ready;
+      const isReverse = ready && clipReverseOut && c.room + 1 === s;
+      const isTail =
+        !isReverse && c.room === s - 1 && ready && clipReady && segV < 0.14;
+
+      if (!isPrimary && !isReverse && !isTail) {
+        mesh.visible = false;
+        u.uFade.value = 0;
+        if (ready && Math.abs(P - c.room) > 1.5 && c.video.currentTime > 0.1) {
+          try {
+            c.video.currentTime = 0.03;
+            c.seekingFrame = -1;
+            c.lastSeekedFrame = -1;
+            c.presentedFrame = -1;
+            c.dispDir = 0;
+            c.staleFrames = 0;
+          } catch {}
+        }
+        return;
+      }
+
+      let fade = 0;
+      let target = 0.03;
+      if (isPrimary) {
+        const rv = Math.min(Math.max(P - c.room, 0), 1);
+        const q = Math.min(Math.max((rv - DWELL) / (1 - DWELL), 0), 1);
+        const eased = 0.5 - 0.5 * Math.cos(Math.PI * q);
+        target = Math.min(0.03 + eased * (dur - 0.13), dur - 0.06);
+        fade = prevClipReady ? 1 : smooth01((segV - (DWELL - 0.03)) / 0.05);
+        if (!nextClipReady && !clipReverseOut)
+          fade *= 1 - smooth01((segV - 0.95) / 0.05);
+      } else if (isReverse) {
+        const rv = Math.min(Math.max(P - s, 0), 1);
+        const q = Math.min(Math.max((rv - DWELL) / (1 - DWELL), 0), 1);
+        const eased = 0.5 - 0.5 * Math.cos(Math.PI * q);
+        target = Math.min(0.03 + (1 - eased) * (dur - 0.13), dur - 0.06);
+        fade = 1 - smooth01((rv - 0.88) / 0.12);
+      } else {
+        target = dur - 0.06;
+        fade = 1 - smooth01(segV / 0.14);
+      }
+
+      const maxFrame = Math.max(0, Math.round(dur * CLIP_FPS) - 1);
+      const f = target * CLIP_FPS;
+      const HYST = 0.55;
+      let frame = c.seekingFrame;
+      if (frame < 0 || f > frame + 0.5 + HYST || f < frame - 0.5 - HYST) {
+        frame = Math.round(f);
+      }
+      frame = Math.min(Math.max(frame, 0), maxFrame);
+
+      // Hard anti-flash ratchet: a clip frame may travel ONLY along the current
+      // sustained scroll direction. A reverse walk-out clip is inverted (its
+      // frame recedes as you scroll DOWN), so its allowed direction flips. Any
+      // step against that (input jitter) is clamped to the last frame — zero flash
+      // both scrolling down (no "steel gate"/corridor) AND up (no jump-ahead).
+      if (c.seekingFrame >= 0) {
+        const allowedDir = isReverse ? -scrollDir.current : scrollDir.current;
+        if (allowedDir > 0 && frame < c.seekingFrame) frame = c.seekingFrame;
+        else if (allowedDir < 0 && frame > c.seekingFrame) frame = c.seekingFrame;
+      }
+
+      if (frame !== c.seekingFrame && !c.video.seeking) {
+        c.seekingFrame = frame;
+        c.video.currentTime = (frame + 0.5) / CLIP_FPS;
+      }
+
+      // Tell the present-guard which way this clip should move right now, so it
+      // rejects any decoder glitch that goes the other way (reverse clips flip).
+      c.dispDir = isReverse ? -scrollDir.current : scrollDir.current;
+      // Stall fallback: if the decoder stops firing presents while a clip is
+      // active (rVFC idle), force one upload so the texture can never freeze.
+      c.staleFrames += 1;
+      if (c.staleFrames > 10) {
+        c.staleFrames = 0;
+        if (c.lastSeekedFrame < 0) c.lastSeekedFrame = c.seekingFrame;
+        c.texture.needsUpdate = true;
+      }
+
+      // CRITICAL GUARD: keep fade = 0 until the clip has presented a real frame.
+      if (c.lastSeekedFrame < 0) {
+        fade = 0;
+      }
+
+      u.uFade.value = fade;
+      // Presence lighting: brighten toward the room-end of each walking clip
+      // (lights ON as you step inside), back to normal at the corridor-end
+      // (OFF as you leave). Frame-based so forward AND reverse map identically,
+      // and both ends match the still-photo brightness (1.0) → no flicker.
+      const fp = maxFrame > 0 ? frame / maxFrame : 0;
+      if (c.room === 1) {
+        // gate → hall: brighten INTO the hall (lights on inside the house)
+        u.uBright.value = 1 + 0.25 * smooth01((fp - 0.55) / 0.45);
+      } else if (c.room === 3 || c.room === 5 || c.room === 7) {
+        // Corridor stays BRIGHT. As you reach the doorway the room is DIM (lights
+        // low), then it brightens SMOOTHLY the deeper you scroll in — and dims
+        // back down as you reverse out. No mid-room dip, no snap/pop.
+        // Both ends still match the stills (corridor 1.0, room 1.25) → no flicker.
+        const atDoor = smooth01((fp - 0.42) / 0.18); // corridor bright → dim as you reach the doorway
+        const deeper = smooth01((fp - 0.55) / 0.45); // then brighten the further in you go
+        u.uBright.value = 1 - 0.45 * atDoor * (1 - deeper) + 0.25 * deeper;
+      } else {
+        u.uBright.value = 1; // balcony clip — outdoor, unchanged
+      }
+      mesh.visible = fade > 0.001;
+
+      const vw = c.video.videoWidth || 1176;
+      const vh = c.video.videoHeight || 784;
+      u.uAspect.value = vw / (vh * (1 - CLIP_CROP_Y));
+      u.uViewAspect.value = viewport.aspect;
+      (u.uMove.value as THREE.Vector2).set(
+        par.current.x * 0.45,
+        -par.current.y * 0.45
+      );
+    });
+  });
+
+  return (
+    <group>
+      {ROOMS.map((r, i) => (
+        <mesh
+          key={i}
+          ref={(el) => {
+            meshes.current[i] = el;
+          }}
+          renderOrder={ROOMS.length - i}
+          scale={[viewport.width * 1.002, viewport.height * 1.002, 1]}
+          material={materials[i]}
+        >
+          <planeGeometry args={[1, 1]} />
+        </mesh>
+      ))}
+      {clips.map((c, idx) => (
+        <mesh
+          key={`clip-${c.room}`}
+          ref={(el) => {
+            clipMeshes.current[idx] = el;
+          }}
+          renderOrder={ROOMS.length + 30 - c.room}
+          scale={[viewport.width * 1.002, viewport.height * 1.002, 1]}
+          material={c.material}
+          visible={false}
+        >
+          <planeGeometry args={[1, 1]} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
