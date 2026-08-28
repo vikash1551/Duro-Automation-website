@@ -288,7 +288,7 @@ export function stationFraction(i: number): number {
 }
 
 /** Scroll length per weight unit, in vh */
-export const SEG_VH = 320;
+export const SEG_VH = 160;
 export const TOTAL_VH = Math.round(TOTAL_W * SEG_VH);
 
 export const SERVICES = [
