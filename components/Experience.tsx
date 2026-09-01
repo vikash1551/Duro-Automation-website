@@ -138,8 +138,8 @@ export default function Experience() {
         <Canvas
           flat
           linear
-          dpr={[1, 1.5]}
-          gl={{ antialias: false, powerPreference: "high-performance" }}
+          dpr={[1, 2]}
+          gl={{ antialias: true, powerPreference: "high-performance" }}
           camera={{ position: [0, 0, 5], fov: 50 }}
         >
           <Suspense fallback={null}>

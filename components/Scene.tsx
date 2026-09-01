@@ -169,33 +169,23 @@ function registerPresentGuard(entry: ClipEntry) {
       cb: (now: number, md: { mediaTime: number }) => void
     ) => number;
   };
-  if (typeof v.requestVideoFrameCallback !== "function") {
-    // Older browsers without rVFC: plain seeked-driven upload (no glitch guard).
+  if (typeof v.requestVideoFrameCallback === "function") {
+    const onPresent = (_now: number, md: { mediaTime: number }) => {
+      entry.presentedFrame = Math.round(md.mediaTime * CLIP_FPS);
+      entry.lastSeekedFrame = entry.presentedFrame;
+      entry.staleFrames = 0;
+      entry.texture.needsUpdate = true;
+      v.requestVideoFrameCallback!(onPresent);
+    };
+    v.requestVideoFrameCallback(onPresent);
+  } else {
     v.addEventListener("seeked", () => {
       entry.presentedFrame = entry.seekingFrame;
-      if (entry.lastSeekedFrame < 0) entry.lastSeekedFrame = entry.seekingFrame;
+      entry.lastSeekedFrame = entry.seekingFrame;
       entry.staleFrames = 0;
       entry.texture.needsUpdate = true;
     });
-    return;
   }
-  const onPresent = (_now: number, md: { mediaTime: number }) => {
-    const fr = Math.round(md.mediaTime * CLIP_FPS);
-    const dir = entry.dispDir;
-    const prev = entry.presentedFrame;
-    // accept only if it moves WITH the current direction (or first / unknown);
-    // a frame against the direction is a decoder glitch — drop it, hold the last
-    const ok =
-      prev < 0 || dir === 0 || (dir > 0 ? fr >= prev - 1 : fr <= prev + 1);
-    if (ok) {
-      entry.presentedFrame = fr;
-      if (entry.lastSeekedFrame < 0) entry.lastSeekedFrame = fr;
-      entry.staleFrames = 0;
-      entry.texture.needsUpdate = true;
-    }
-    v.requestVideoFrameCallback!(onPresent);
-  };
-  v.requestVideoFrameCallback(onPresent);
 }
 
 export default function Scene() {
@@ -406,7 +396,11 @@ export default function Scene() {
     const nextClipReady = clips.some(
       (c) => c.room === s + 1 && c.video.readyState >= 2
     );
+    const activeClip = clips.find((c) => c.room === s);
+    const hasPresented = activeClip ? activeClip.lastSeekedFrame >= 0 : false;
     const revSeg = s > 0 && !!ROOMS[s - 1]?.reverseOut;
+    const revClip = revSeg ? clips.find((c) => c.room === s - 1) : null;
+    const revPresented = revClip ? revClip.lastSeekedFrame >= 0 : false;
 
     materials.forEach((mat, i) => {
       const mesh = meshes.current[i];
@@ -448,9 +442,19 @@ export default function Scene() {
           u.uDollyN.value = bz * (1.045 + 0.04 * ds * smooth01(k));
           u.uDollyF.value = bz * (1.03 + 0.01 * ds * smooth01(k));
           u.uStreak.value = 0;
-          u.uFade.value = prevClipReady
-            ? 0
-            : 1 - smooth01((v - DWELL - 0.02) / 0.1);
+          u.uFade.value = hasPresented
+            ? 1.0 - smooth01((v - (DWELL - 0.02)) / 0.08)
+            : 1.0;
+          u.uBright.value = 1;
+          u.uVig.value = 0;
+        } else if (revSeg) {
+          const k = Math.min(v / DWELL, 1);
+          u.uDollyN.value = bz * (1.045 + 0.03 * ds * smooth01(k));
+          u.uDollyF.value = bz * (1.03 + 0.01 * ds * smooth01(k));
+          u.uStreak.value = 0;
+          u.uFade.value = revPresented
+            ? 1.0 - smooth01((v - (DWELL - 0.02)) / 0.08)
+            : 1.0;
           u.uBright.value = 1;
           u.uVig.value = 0;
         } else if (v < DWELL) {
@@ -477,12 +481,11 @@ export default function Scene() {
           u.uDollyF.value = bz * 1.03;
           u.uStreak.value = 0;
           u.uFade.value = 1;
-          u.uBright.value = 0.9 + 0.1 * smooth01((v - 0.7) / 0.28);
+          u.uBright.value = 1;
           u.uVig.value = 0;
         } else if (revSeg && i === s + 1) {
-          const a = smooth01((v - 0.88) / 0.12);
-          u.uDollyN.value = bz * (1.06 - 0.015 * a);
-          u.uDollyF.value = bz * (1.038 - 0.008 * a);
+          u.uDollyN.value = bz * 1.045;
+          u.uDollyF.value = bz * 1.03;
           u.uStreak.value = 0;
           u.uFade.value = 1;
           u.uBright.value = 1;
@@ -504,14 +507,6 @@ export default function Scene() {
           u.uStreak.value = 0;
         }
       }
-
-      // Presence lighting — the HALL brightens when you're in it, easing back
-      // to normal (the corridor's brightness, 1.0) as you leave. Corridors stay
-      // bright. Values match at every handoff → no brightness flicker.
-      if (i === 2) {
-        const presence = 1 - smooth01((Math.abs(P - 2) - 0.15) / 0.6);
-        u.uBright.value = 1 + 0.25 * presence;
-      }
     });
 
     // drive the walking clips — scrubbed purely by scroll progress.
@@ -522,15 +517,11 @@ export default function Scene() {
       const u = c.material.uniforms;
       const dur = c.video.duration || 5;
 
-      // Texture uploads are driven by registerPresentGuard() (rVFC) — it rejects
-      // any decoder glitch frame so one can never reach the screen. The per-frame
-      // dispDir it needs is set just below, after the ratchet.
-
       const clipReverseOut = !!ROOMS[c.room]?.reverseOut;
       const isPrimary = c.room === s && ready;
       const isReverse = ready && clipReverseOut && c.room + 1 === s;
       const isTail =
-        !isReverse && c.room === s - 1 && ready && clipReady && segV < 0.14;
+        !isReverse && c.room === s - 1 && ready && segV < 0.14;
 
       if (!isPrimary && !isReverse && !isTail) {
         mesh.visible = false;
@@ -555,55 +546,25 @@ export default function Scene() {
         const q = Math.min(Math.max((rv - DWELL) / (1 - DWELL), 0), 1);
         const eased = 0.5 - 0.5 * Math.cos(Math.PI * q);
         target = Math.min(0.03 + eased * (dur - 0.13), dur - 0.06);
-        fade = prevClipReady ? 1 : smooth01((segV - (DWELL - 0.03)) / 0.05);
+        fade = smooth01((segV - (DWELL - 0.02)) / 0.08);
         if (!nextClipReady && !clipReverseOut)
-          fade *= 1 - smooth01((segV - 0.95) / 0.05);
+          fade *= 1 - smooth01((segV - 0.94) / 0.06);
       } else if (isReverse) {
         const rv = Math.min(Math.max(P - s, 0), 1);
         const q = Math.min(Math.max((rv - DWELL) / (1 - DWELL), 0), 1);
         const eased = 0.5 - 0.5 * Math.cos(Math.PI * q);
         target = Math.min(0.03 + (1 - eased) * (dur - 0.13), dur - 0.06);
-        fade = 1 - smooth01((rv - 0.88) / 0.12);
+        fade = smooth01((rv - (DWELL - 0.02)) / 0.08);
+        fade *= 1 - smooth01((rv - 0.94) / 0.06);
       } else {
         target = dur - 0.06;
         fade = 1 - smooth01(segV / 0.14);
       }
 
-      const maxFrame = Math.max(0, Math.round(dur * CLIP_FPS) - 1);
-      const f = target * CLIP_FPS;
-      const HYST = 0.55;
-      let frame = c.seekingFrame;
-      if (frame < 0 || f > frame + 0.5 + HYST || f < frame - 0.5 - HYST) {
-        frame = Math.round(f);
-      }
-      frame = Math.min(Math.max(frame, 0), maxFrame);
-
-      // Hard anti-flash ratchet: a clip frame may travel ONLY along the current
-      // sustained scroll direction. A reverse walk-out clip is inverted (its
-      // frame recedes as you scroll DOWN), so its allowed direction flips. Any
-      // step against that (input jitter) is clamped to the last frame — zero flash
-      // both scrolling down (no "steel gate"/corridor) AND up (no jump-ahead).
-      if (c.seekingFrame >= 0) {
-        const allowedDir = isReverse ? -scrollDir.current : scrollDir.current;
-        if (allowedDir > 0 && frame < c.seekingFrame) frame = c.seekingFrame;
-        else if (allowedDir < 0 && frame > c.seekingFrame) frame = c.seekingFrame;
-      }
-
-      if (frame !== c.seekingFrame && !c.video.seeking) {
-        c.seekingFrame = frame;
-        c.video.currentTime = (frame + 0.5) / CLIP_FPS;
-      }
-
-      // Tell the present-guard which way this clip should move right now, so it
-      // rejects any decoder glitch that goes the other way (reverse clips flip).
-      c.dispDir = isReverse ? -scrollDir.current : scrollDir.current;
-      // Stall fallback: if the decoder stops firing presents while a clip is
-      // active (rVFC idle), force one upload so the texture can never freeze.
-      c.staleFrames += 1;
-      if (c.staleFrames > 10) {
-        c.staleFrames = 0;
-        if (c.lastSeekedFrame < 0) c.lastSeekedFrame = c.seekingFrame;
-        c.texture.needsUpdate = true;
+      const targetTime = Math.min(Math.max(target, 0.03), dur - 0.06);
+      if (!c.video.seeking && Math.abs(c.video.currentTime - targetTime) > 0.008) {
+        c.video.currentTime = targetTime;
+        c.seekingFrame = Math.round(targetTime * CLIP_FPS);
       }
 
       // CRITICAL GUARD: keep fade = 0 until the clip has presented a real frame.
@@ -612,26 +573,19 @@ export default function Scene() {
       }
 
       u.uFade.value = fade;
-      // Presence lighting: brighten toward the room-end of each walking clip
-      // (lights ON as you step inside), back to normal at the corridor-end
-      // (OFF as you leave). Frame-based so forward AND reverse map identically,
-      // and both ends match the still-photo brightness (1.0) → no flicker.
-      const fp = maxFrame > 0 ? frame / maxFrame : 0;
+      mesh.visible = fade > 0.001;
+
+      // Smooth dynamic brightness matching
+      const fp = dur > 0 ? targetTime / dur : 0;
       if (c.room === 1) {
-        // gate → hall: brighten INTO the hall (lights on inside the house)
         u.uBright.value = 1 + 0.25 * smooth01((fp - 0.55) / 0.45);
       } else if (c.room === 3 || c.room === 5 || c.room === 7) {
-        // Corridor stays BRIGHT. As you reach the doorway the room is DIM (lights
-        // low), then it brightens SMOOTHLY the deeper you scroll in — and dims
-        // back down as you reverse out. No mid-room dip, no snap/pop.
-        // Both ends still match the stills (corridor 1.0, room 1.25) → no flicker.
-        const atDoor = smooth01((fp - 0.42) / 0.18); // corridor bright → dim as you reach the doorway
-        const deeper = smooth01((fp - 0.55) / 0.45); // then brighten the further in you go
-        u.uBright.value = 1 - 0.45 * atDoor * (1 - deeper) + 0.25 * deeper;
+        const atDoor = smooth01((fp - 0.42) / 0.18);
+        const deeper = smooth01((fp - 0.55) / 0.45);
+        u.uBright.value = 1 - 0.25 * atDoor * (1 - deeper) + 0.25 * deeper;
       } else {
-        u.uBright.value = 1; // balcony clip — outdoor, unchanged
+        u.uBright.value = 1;
       }
-      mesh.visible = fade > 0.001;
 
       const vw = c.video.videoWidth || 1176;
       const vh = c.video.videoHeight || 784;
