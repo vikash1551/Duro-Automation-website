@@ -2,15 +2,13 @@ import dns from "node:dns";
 import mongoose from "mongoose";
 
 // Force Google DNS — fixes SRV lookup failures with some ISP DNS servers
-dns.setServers(["8.8.8.8", "8.8.4.4"]);
-
-const MONGODB_URI = process.env.MONGODB_URI!;
-
-if (!MONGODB_URI) {
-  throw new Error(
-    "Please define the MONGODB_URI environment variable inside .env.local"
-  );
+try {
+  dns.setServers(["8.8.8.8", "8.8.4.4"]);
+} catch {
+  // In environments where setting custom DNS is restricted, ignore
 }
+
+const MONGODB_URI = process.env.MONGODB_URI;
 
 /**
  * Global is used here to maintain a cached connection across hot reloads
@@ -34,12 +32,19 @@ if (!global.mongooseCache) {
 }
 
 async function dbConnect(): Promise<typeof mongoose> {
+  const uri = process.env.MONGODB_URI || MONGODB_URI;
+  if (!uri) {
+    throw new Error(
+      "Please define the MONGODB_URI environment variable inside .env.local or Vercel Environment Variables"
+    );
+  }
+
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+    cached.promise = mongoose.connect(uri, {
       bufferCommands: false,
     });
   }
