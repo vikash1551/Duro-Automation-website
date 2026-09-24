@@ -176,19 +176,48 @@ function registerPresentGuard(entry: ClipEntry) {
   };
   if (typeof v.requestVideoFrameCallback === "function") {
     const onPresent = (_now: number, md: { mediaTime: number }) => {
-      entry.presentedFrame = Math.round(md.mediaTime * CLIP_FPS);
-      entry.lastSeekedFrame = entry.presentedFrame;
-      entry.staleFrames = 0;
-      entry.texture.needsUpdate = true;
+      const frame = Math.round(md.mediaTime * CLIP_FPS);
+      entry.presentedFrame = frame;
+
+      // Only upload this frame to the GPU if it's close to our seek target.
+      // Video decoders often briefly present stale keyframes (e.g. the gate
+      // at frame 0) during a seek — uploading those causes visible flashes.
+      const tgt = entry.seekingFrame;
+      if (tgt >= 0 && Math.abs(frame - tgt) <= CLIP_FPS) {
+        // Good frame — close to where we want to be
+        entry.lastSeekedFrame = frame;
+        entry.texture.needsUpdate = true;
+        entry.staleFrames = 0;
+      } else if (tgt >= 0) {
+        // Frame is too far from target — reject it, keep showing last good frame
+        entry.staleFrames++;
+        // Stale fallback: if decoder is stuck for too long, force-accept
+        // to prevent the video from appearing frozen (~0.6s at 24fps rVFC)
+        if (entry.staleFrames > 15) {
+          entry.lastSeekedFrame = frame;
+          entry.texture.needsUpdate = true;
+          entry.staleFrames = 0;
+        }
+      }
+      // If tgt < 0 (no active seek / clip inactive), don't update anything —
+      // this prevents reset-seeks (to frame 0) from priming lastSeekedFrame
+      // which would let the clip display a stale frame when it reactivates.
+
       v.requestVideoFrameCallback!(onPresent);
     };
     v.requestVideoFrameCallback(onPresent);
   } else {
     v.addEventListener("seeked", () => {
-      entry.presentedFrame = entry.seekingFrame;
-      entry.lastSeekedFrame = entry.seekingFrame;
-      entry.staleFrames = 0;
-      entry.texture.needsUpdate = true;
+      const frame = Math.round(v.currentTime * CLIP_FPS);
+      entry.presentedFrame = frame;
+      const tgt = entry.seekingFrame;
+      if (tgt >= 0 && (Math.abs(frame - tgt) <= CLIP_FPS || entry.staleFrames > 15)) {
+        entry.lastSeekedFrame = frame;
+        entry.texture.needsUpdate = true;
+        entry.staleFrames = 0;
+      } else if (tgt >= 0) {
+        entry.staleFrames++;
+      }
     });
   }
 }
@@ -590,9 +619,11 @@ export default function Scene() {
       }
 
       const targetTime = Math.min(Math.max(target, 0.03), dur - 0.06);
+      // Always track what frame we WANT — the rVFC proximity guard uses this
+      // to reject stale decoder frames even before we issue the seek.
+      c.seekingFrame = Math.round(targetTime * CLIP_FPS);
       if (!c.video.seeking && Math.abs(c.video.currentTime - targetTime) > 0.008) {
         c.video.currentTime = targetTime;
-        c.seekingFrame = Math.round(targetTime * CLIP_FPS);
       }
 
       // CRITICAL GUARD: keep fade = 0 until the clip has presented a real frame.
