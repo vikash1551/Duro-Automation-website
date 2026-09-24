@@ -154,6 +154,11 @@ type ClipEntry = {
 /** all clips are encoded at this frame rate (see scripts/prep-clips.mjs) */
 const CLIP_FPS = 24;
 
+/** Crossfade width (fraction of one segment's scroll range).
+ *  Wide enough that scroll jitter can't toggle it, tight enough to
+ *  avoid ghosting double-exposure.  0.05 ≈ 10.5 vh of scroll travel. */
+const XFADE_W = 0.05;
+
 /**
  * Decode-glitch guard. A scrubbed <video> occasionally PRESENTS a stale/earlier
  * decoded frame for a single tick even though currentTime never went backward —
@@ -442,9 +447,18 @@ export default function Scene() {
           u.uDollyN.value = bz * (1.045 + 0.04 * ds * smooth01(k));
           u.uDollyF.value = bz * (1.03 + 0.01 * ds * smooth01(k));
           u.uStreak.value = 0;
-          u.uFade.value = hasPresented
-            ? 1.0 - smooth01((v - (DWELL - 0.02)) / 0.08)
-            : 1.0;
+          // Still image stays solid until video is opaque on top, then fades
+          // out behind it (invisible to viewer). This guarantees no black gap.
+          if (v < DWELL || !hasPresented) {
+            u.uFade.value = 1.0;
+          } else if (v < DWELL + XFADE_W * 2) {
+            // Video is still fading in — keep solid as safety backing
+            u.uFade.value = 1.0;
+          } else {
+            // Video is fully opaque on top — fade this out (invisible)
+            const xf = Math.min((v - DWELL - XFADE_W * 2) / XFADE_W, 1);
+            u.uFade.value = 1.0 - smooth01(xf);
+          }
           u.uBright.value = 1;
           u.uVig.value = 0;
         } else if (revSeg) {
@@ -452,9 +466,14 @@ export default function Scene() {
           u.uDollyN.value = bz * (1.045 + 0.03 * ds * smooth01(k));
           u.uDollyF.value = bz * (1.03 + 0.01 * ds * smooth01(k));
           u.uStreak.value = 0;
-          u.uFade.value = revPresented
-            ? 1.0 - smooth01((v - (DWELL - 0.02)) / 0.08)
-            : 1.0;
+          if (v < DWELL || !revPresented) {
+            u.uFade.value = 1.0;
+          } else if (v < DWELL + XFADE_W * 2) {
+            u.uFade.value = 1.0;
+          } else {
+            const xf = Math.min((v - DWELL - XFADE_W * 2) / XFADE_W, 1);
+            u.uFade.value = 1.0 - smooth01(xf);
+          }
           u.uBright.value = 1;
           u.uVig.value = 0;
         } else if (v < DWELL) {
@@ -520,10 +539,8 @@ export default function Scene() {
       const clipReverseOut = !!ROOMS[c.room]?.reverseOut;
       const isPrimary = c.room === s && ready;
       const isReverse = ready && clipReverseOut && c.room + 1 === s;
-      const isTail =
-        !isReverse && c.room === s - 1 && ready && segV < 0.14;
 
-      if (!isPrimary && !isReverse && !isTail) {
+      if (!isPrimary && !isReverse) {
         mesh.visible = false;
         u.uFade.value = 0;
         if (ready && Math.abs(P - c.room) > 1.5 && c.video.currentTime > 0.1) {
@@ -546,19 +563,30 @@ export default function Scene() {
         const q = Math.min(Math.max((rv - DWELL) / (1 - DWELL), 0), 1);
         const eased = 0.5 - 0.5 * Math.cos(Math.PI * q);
         target = Math.min(0.03 + eased * (dur - 0.13), dur - 0.06);
-        fade = smooth01((segV - (DWELL - 0.02)) / 0.08);
-        if (!nextClipReady && !clipReverseOut)
-          fade *= 1 - smooth01((segV - 0.94) / 0.06);
+        // Smooth crossfade: fade in after DWELL, fade out near segment end
+        if (rv < DWELL) {
+          fade = 0;
+        } else {
+          const fadeIn = smooth01(Math.min((rv - DWELL) / XFADE_W, 1));
+          const fadeOut = rv > 1.0 - XFADE_W
+            ? 1.0 - smooth01((rv - (1.0 - XFADE_W)) / XFADE_W)
+            : 1.0;
+          fade = fadeIn * fadeOut;
+        }
       } else if (isReverse) {
         const rv = Math.min(Math.max(P - s, 0), 1);
         const q = Math.min(Math.max((rv - DWELL) / (1 - DWELL), 0), 1);
         const eased = 0.5 - 0.5 * Math.cos(Math.PI * q);
         target = Math.min(0.03 + (1 - eased) * (dur - 0.13), dur - 0.06);
-        fade = smooth01((rv - (DWELL - 0.02)) / 0.08);
-        fade *= 1 - smooth01((rv - 0.94) / 0.06);
-      } else {
-        target = dur - 0.06;
-        fade = 1 - smooth01(segV / 0.14);
+        if (rv < DWELL) {
+          fade = 0;
+        } else {
+          const fadeIn = smooth01(Math.min((rv - DWELL) / XFADE_W, 1));
+          const fadeOut = rv > 1.0 - XFADE_W
+            ? 1.0 - smooth01((rv - (1.0 - XFADE_W)) / XFADE_W)
+            : 1.0;
+          fade = fadeIn * fadeOut;
+        }
       }
 
       const targetTime = Math.min(Math.max(target, 0.03), dur - 0.06);
