@@ -162,7 +162,7 @@ export default function BookingModal() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full mt-2 rounded-full bg-gold py-4 text-xs font-semibold uppercase tracking-[0.2em] text-black hover:bg-goldsoft hover:shadow-[0_0_20px_rgba(200,162,95,0.4)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full mt-2 rounded-full bg-gold py-4 text-xs font-semibold uppercase tracking-[0.2em] text-black hover:bg-goldsoft hover:shadow-[0_0_20px_rgba(245,166,35,0.4)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? "Submitting..." : "Submit"}
                   </button>

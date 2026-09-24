@@ -59,7 +59,7 @@ export default function Nav({ barRef }: { barRef: RefObject<HTMLDivElement | nul
         <div className="flex items-center gap-4">
           <button
             onClick={openBookingModal}
-            className="pointer-events-auto text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.2em] bg-gold text-black hover:bg-goldsoft hover:shadow-[0_0_15px_rgba(200,162,95,0.4)] transition-all duration-300 rounded-full px-6 py-2.5"
+            className="pointer-events-auto text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.2em] bg-gold text-black hover:bg-goldsoft hover:shadow-[0_0_15px_rgba(245,166,35,0.4)] transition-all duration-300 rounded-full px-6 py-2.5"
           >
             Book Service
           </button>

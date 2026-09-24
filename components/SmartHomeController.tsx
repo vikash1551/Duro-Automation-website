@@ -65,7 +65,7 @@ function Shad({ x, y, w, d }: { x: number; y: number; w: number; d: number }) {
 }
 
 function Floor({ x0, y0, x1, y1, fill }: { x0: number; y0: number; x1: number; y1: number; fill: string }) {
-  return <polygon points={`${P(x0, y0)} ${P(x1, y0)} ${P(x1, y1)} ${P(x0, y1)}`} fill={fill} stroke="rgba(200,162,95,0.10)" strokeWidth={1} />;
+  return <polygon points={`${P(x0, y0)} ${P(x1, y0)} ${P(x1, y1)} ${P(x0, y1)}`} fill={fill} stroke="rgba(245,166,35,0.10)" strokeWidth={1} />;
 }
 
 // warm light pool for a room (screen space), fades with `on`
@@ -194,14 +194,14 @@ function IsoHome({
       <Floor x0={0} y0={4} x1={5} y1={8} fill="url(#floorWood)" />
       <Floor x0={5} y0={5.3} x1={10} y1={8} fill="url(#floorStone)" />
       {/* front driveway / entrance apron */}
-      <polygon points={`${P(5.8, 8)} ${P(9.1, 8)} ${P(9.1, 8.9)} ${P(5.8, 8.9)}`} fill="#22242c" stroke="rgba(200,162,95,0.12)" />
-      <polygon points={`${P(6.4, 8)} ${P(8.5, 8)} ${P(8.5, 8.8)} ${P(6.4, 8.8)}`} fill="none" stroke="rgba(200,162,95,0.1)" />
+      <polygon points={`${P(5.8, 8)} ${P(9.1, 8)} ${P(9.1, 8.9)} ${P(5.8, 8.9)}`} fill="#22242c" stroke="rgba(245,166,35,0.12)" />
+      <polygon points={`${P(6.4, 8)} ${P(8.5, 8)} ${P(8.5, 8.8)} ${P(6.4, 8.8)}`} fill="none" stroke="rgba(245,166,35,0.1)" />
 
       {/* rugs */}
-      <polygon points={`${P(0.9, 1)} ${P(3.7, 1)} ${P(3.7, 3.3)} ${P(0.9, 3.3)}`} fill="rgba(196,124,68,0.22)" stroke="rgba(200,162,95,0.3)" />
-      <polygon points={`${P(1.4, 1.4)} ${P(3.2, 1.4)} ${P(3.2, 2.9)} ${P(1.4, 2.9)}`} fill="none" stroke="rgba(200,162,95,0.2)" />
-      <polygon points={`${P(1.1, 5)} ${P(3.9, 5)} ${P(3.9, 7.3)} ${P(1.1, 7.3)}`} fill="rgba(160,148,168,0.15)" stroke="rgba(200,162,95,0.16)" />
-      <polygon points={`${P(6.6, 6)} ${P(8.9, 6)} ${P(8.9, 7.6)} ${P(6.6, 7.6)}`} fill="rgba(160,128,96,0.13)" stroke="rgba(200,162,95,0.14)" />
+      <polygon points={`${P(0.9, 1)} ${P(3.7, 1)} ${P(3.7, 3.3)} ${P(0.9, 3.3)}`} fill="rgba(196,124,68,0.22)" stroke="rgba(245,166,35,0.3)" />
+      <polygon points={`${P(1.4, 1.4)} ${P(3.2, 1.4)} ${P(3.2, 2.9)} ${P(1.4, 2.9)}`} fill="none" stroke="rgba(245,166,35,0.2)" />
+      <polygon points={`${P(1.1, 5)} ${P(3.9, 5)} ${P(3.9, 7.3)} ${P(1.1, 7.3)}`} fill="rgba(160,148,168,0.15)" stroke="rgba(245,166,35,0.16)" />
+      <polygon points={`${P(6.6, 6)} ${P(8.9, 6)} ${P(8.9, 7.6)} ${P(6.6, 7.6)}`} fill="rgba(160,128,96,0.13)" stroke="rgba(245,166,35,0.14)" />
 
       {/* ---------- WARM LIGHT POOLS + AMBIENT ---------- */}
       <g>
@@ -233,8 +233,8 @@ function IsoHome({
       <Box x={7.9} y={5.24} w={2.1} d={0.13} h={1.05} c={WALL} />
 
       {/* wall art on the living-room left wall */}
-      <polygon points={`${P(0.11, 1.0, 0.82)} ${P(0.11, 1.7, 0.82)} ${P(0.11, 1.7, 1.24)} ${P(0.11, 1.0, 1.24)}`} fill="#17130c" stroke="rgba(200,162,95,0.5)" strokeWidth="1" />
-      <polygon points={`${P(0.11, 2.15, 0.86)} ${P(0.11, 2.95, 0.86)} ${P(0.11, 2.95, 1.2)} ${P(0.11, 2.15, 1.2)}`} fill="#191307" stroke="rgba(200,162,95,0.42)" strokeWidth="1" />
+      <polygon points={`${P(0.11, 1.0, 0.82)} ${P(0.11, 1.7, 0.82)} ${P(0.11, 1.7, 1.24)} ${P(0.11, 1.0, 1.24)}`} fill="#17130c" stroke="rgba(245,166,35,0.5)" strokeWidth="1" />
+      <polygon points={`${P(0.11, 2.15, 0.86)} ${P(0.11, 2.95, 0.86)} ${P(0.11, 2.95, 1.2)} ${P(0.11, 2.15, 1.2)}`} fill="#191307" stroke="rgba(245,166,35,0.42)" strokeWidth="1" />
 
       {/* ============ LIVING ============ */}
       <Shad x={0.9} y={2.4} w={2.9} d={0.9} />
@@ -250,7 +250,7 @@ function IsoHome({
       <Shad x={1.4} y={0.2} w={1.5} d={0.4} />
       <Box x={1.4} y={0.2} w={1.5} d={0.4} h={0.42} c={DARK} />{/* media console */}
       {/* TV — reacts to the remote's TV toggle */}
-      <polygon points={`${P(1.45, 0.16, 0.6)} ${P(2.75, 0.16, 0.6)} ${P(2.75, 0.16, 1.02)} ${P(1.45, 0.16, 1.02)}`} fill="#0a0d12" stroke="rgba(200,162,95,0.35)" strokeWidth="1" />
+      <polygon points={`${P(1.45, 0.16, 0.6)} ${P(2.75, 0.16, 0.6)} ${P(2.75, 0.16, 1.02)} ${P(1.45, 0.16, 1.02)}`} fill="#0a0d12" stroke="rgba(245,166,35,0.35)" strokeWidth="1" />
       <polygon points={`${P(1.52, 0.16, 0.65)} ${P(2.68, 0.16, 0.65)} ${P(2.68, 0.16, 0.97)} ${P(1.52, 0.16, 0.97)}`} fill={tv ? "url(#tvOn)" : "#0c0f15"} style={{ transition: "fill 500ms" }} />
       {tv && <ellipse cx={CX(2.1, 0.55)} cy={CY(2.1, 0.55, 0.82)} rx="34" ry="20" fill="#4d8be6" opacity="0.2" style={{ mixBlendMode: "screen" }} />}
       <Box x={0.4} y={0.5} w={0.2} d={0.2} h={1.5} c={METAL} />{/* floor lamp */}
@@ -282,10 +282,10 @@ function IsoHome({
 
       {/* ============ DINING ============ */}
       <Box x={7.3} y={0.15} w={1.6} d={0.36} h={0.55} c={WARMW} />{/* sideboard */}
-      <polygon points={`${P(7.5, 0.13, 0.75)} ${P(8.6, 0.13, 0.75)} ${P(8.6, 0.13, 1.15)} ${P(7.5, 0.13, 1.15)}`} fill="#141009" stroke="rgba(200,162,95,0.42)" strokeWidth="1" />
+      <polygon points={`${P(7.5, 0.13, 0.75)} ${P(8.6, 0.13, 0.75)} ${P(8.6, 0.13, 1.15)} ${P(7.5, 0.13, 1.15)}`} fill="#141009" stroke="rgba(245,166,35,0.42)" strokeWidth="1" />
       <Shad x={6.6} y={0.8} w={1.8} d={0.9} />
       <Box x={6.6} y={0.8} w={1.8} d={0.9} h={0.48} c={WARMW} />{/* table */}
-      <polygon points={`${P(6.75, 0.95, 0.49)} ${P(8.25, 0.95, 0.49)} ${P(8.25, 1.55, 0.49)} ${P(6.75, 1.55, 0.49)}`} fill="rgba(200,162,95,0.14)" />
+      <polygon points={`${P(6.75, 0.95, 0.49)} ${P(8.25, 0.95, 0.49)} ${P(8.25, 1.55, 0.49)} ${P(6.75, 1.55, 0.49)}`} fill="rgba(245,166,35,0.14)" />
       <Box x={7.35} y={1.05} w={0.18} d={0.18} h={0.32} z={0.48} c={LEAF} />{/* centerpiece */}
       {[[6.4, 0.7], [8.5, 0.7], [6.4, 1.75], [8.5, 1.75]].map(([cx, cy], i) => (
         <Box key={i} x={cx} y={cy} w={0.4} d={0.4} h={0.66} c={DARK} />
@@ -324,11 +324,11 @@ function IsoHome({
       {/* window + SMOOTH sliding curtains (transform-driven) on x=0 wall */}
       <polygon points={`${P(0.13, 5, 0.4)} ${P(0.13, 7.2, 0.4)} ${P(0.13, 7.2, 1.45)} ${P(0.13, 5, 1.45)}`} fill={curtains ? "rgba(255,205,140,0.34)" : "rgba(90,120,165,0.24)"} style={{ transition: "fill 900ms ease" }} />
       <g style={{ transform: curtains ? "translate(15px,-7.5px)" : "translate(0px,0px)", transition: "transform 950ms cubic-bezier(0.4,0,0.2,1)" }}>
-        <polygon points={`${P(0.1, 5.05, 0.42)} ${P(0.1, 6.05, 0.42)} ${P(0.1, 6.05, 1.48)} ${P(0.1, 5.05, 1.48)}`} fill="rgba(200,162,95,0.6)" />
+        <polygon points={`${P(0.1, 5.05, 0.42)} ${P(0.1, 6.05, 0.42)} ${P(0.1, 6.05, 1.48)} ${P(0.1, 5.05, 1.48)}`} fill="rgba(245,166,35,0.6)" />
         {[0, 1, 2].map((i) => (<line key={i} x1={CX(0.1, 5.25 + i * 0.27)} y1={CY(0.1, 5.25 + i * 0.27, 0.42)} x2={CX(0.1, 5.25 + i * 0.27)} y2={CY(0.1, 5.25 + i * 0.27, 1.48)} stroke="rgba(0,0,0,0.13)" strokeWidth="1" />))}
       </g>
       <g style={{ transform: curtains ? "translate(-15px,7.5px)" : "translate(0px,0px)", transition: "transform 950ms cubic-bezier(0.4,0,0.2,1)" }}>
-        <polygon points={`${P(0.1, 6.15, 0.42)} ${P(0.1, 7.15, 0.42)} ${P(0.1, 7.15, 1.48)} ${P(0.1, 6.15, 1.48)}`} fill="rgba(200,162,95,0.6)" />
+        <polygon points={`${P(0.1, 6.15, 0.42)} ${P(0.1, 7.15, 0.42)} ${P(0.1, 7.15, 1.48)} ${P(0.1, 6.15, 1.48)}`} fill="rgba(245,166,35,0.6)" />
         {[0, 1, 2].map((i) => (<line key={i} x1={CX(0.1, 6.35 + i * 0.27)} y1={CY(0.1, 6.35 + i * 0.27, 0.42)} x2={CX(0.1, 6.35 + i * 0.27)} y2={CY(0.1, 6.35 + i * 0.27, 1.48)} stroke="rgba(0,0,0,0.13)" strokeWidth="1" />))}
       </g>
       <Pendant x={2.4} y={6.1} on={lights} />
@@ -403,7 +403,7 @@ function IsoHome({
 
       {/* ---------- AUTOMATION MESH ---------- */}
       <g style={{ opacity: 0.9 }}>
-        <polyline className="duro-dash" points={`${P(2.4, 2, 0.05)} ${P(7.5, 1.25, 0.05)} ${P(7.8, 3.8, 0.05)} ${P(7.4, 6.9, 0.05)} ${P(2.4, 6, 0.05)} ${P(2.4, 2, 0.05)}`} fill="none" stroke="rgba(200,162,95,0.26)" strokeWidth="1" strokeDasharray="3 6" />
+        <polyline className="duro-dash" points={`${P(2.4, 2, 0.05)} ${P(7.5, 1.25, 0.05)} ${P(7.8, 3.8, 0.05)} ${P(7.4, 6.9, 0.05)} ${P(2.4, 6, 0.05)} ${P(2.4, 2, 0.05)}`} fill="none" stroke="rgba(245,166,35,0.26)" strokeWidth="1" strokeDasharray="3 6" />
         {[[2.4, 2], [7.5, 1.25], [7.8, 3.8], [2.4, 6], [7.4, 6.9]].map(([x, y], i) => (
           <circle key={i} className="duro-node" cx={CX(x, y)} cy={CY(x, y, 0.05)} r="2.6" fill="#c8a25f" style={{ animationDelay: `${i * 0.3}s` }} />
         ))}
@@ -426,7 +426,7 @@ function IsoHome({
 function StatCard({ icon, label, value, active, activeColor = "gold", onClick }: { icon: React.ReactNode; label: string; value: string; active: boolean; activeColor?: "gold" | "red"; onClick: () => void }) {
   const on = activeColor === "red"
     ? "border-red-400/50 bg-red-500/10 shadow-[0_0_0_1px_rgba(248,113,113,0.35),0_0_20px_-6px_rgba(248,113,113,0.6)]"
-    : "border-gold/60 bg-gold/[0.12] shadow-[0_0_0_1px_rgba(200,162,95,0.4),0_0_22px_-6px_rgba(200,162,95,0.6)]";
+    : "border-gold/60 bg-gold/[0.12] shadow-[0_0_0_1px_rgba(245,166,35,0.4),0_0_22px_-6px_rgba(245,166,35,0.6)]";
   const chip = activeColor === "red" ? "bg-red-400 text-black" : "bg-gold text-black";
   const valColor = active ? (activeColor === "red" ? "text-red-300" : "text-gold") : "text-stone-200";
   return (
@@ -557,7 +557,7 @@ export default function SmartHomeController() {
                       <StatCard icon={<GateI />} label="Gate" value={gate ? "Open" : "Closed"} active={gate} onClick={tog(setGate)} />
                       <StatCard icon={<MusicI />} label="Music" value={music ? "Playing" : "Off"} active={music} onClick={tog(setMusic)} />
                       <StatCard icon={<ShieldI />} label="Security" value={security ? "Armed" : "Off"} active={security} activeColor="red" onClick={tog(setSecurity)} />
-                      <button type="button" onClick={tog(setTv)} className={`col-span-3 flex items-center gap-3 rounded-2xl border p-3 text-left transition-all duration-300 active:scale-[0.98] ${tv ? "border-gold/60 bg-gold/[0.12] shadow-[0_0_0_1px_rgba(200,162,95,0.4),0_0_22px_-6px_rgba(200,162,95,0.6)]" : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.05]"}`}>
+                      <button type="button" onClick={tog(setTv)} className={`col-span-3 flex items-center gap-3 rounded-2xl border p-3 text-left transition-all duration-300 active:scale-[0.98] ${tv ? "border-gold/60 bg-gold/[0.12] shadow-[0_0_0_1px_rgba(245,166,35,0.4),0_0_22px_-6px_rgba(245,166,35,0.6)]" : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.05]"}`}>
                         <span className={`flex h-7 w-7 items-center justify-center rounded-lg p-1.5 transition-colors duration-300 ${tv ? "bg-gold text-black" : "bg-white/[0.06] text-stone-300"}`}><TvI /></span>
                         <span className="flex-1 text-[11px] uppercase tracking-[0.14em] text-stone-400">Television</span>
                         <span className={`text-[13px] font-semibold ${tv ? "text-gold" : "text-stone-200"}`}>{tv ? "On" : "Off"}</span>
@@ -596,7 +596,7 @@ export default function SmartHomeController() {
                       {([["morning", "Good Morning"], ["evening", "Good Evening"], ["arm", "Arm Outside"], ["away", "Home Away"]] as [Exclude<Scene, null>, string][]).map(([key, label]) => {
                         const on = scene === key;
                         return (
-                          <button key={key} type="button" onClick={applyScene(key)} className={`rounded-xl border px-3 py-2.5 text-[12px] font-medium transition-all duration-300 active:scale-[0.97] ${on ? "border-gold/50 bg-gradient-to-b from-gold/25 to-gold/10 text-gold shadow-[0_0_20px_-6px_rgba(200,162,95,0.6)]" : "border-white/10 bg-white/[0.03] text-stone-300 hover:border-white/25 hover:text-white"}`}>{label}</button>
+                          <button key={key} type="button" onClick={applyScene(key)} className={`rounded-xl border px-3 py-2.5 text-[12px] font-medium transition-all duration-300 active:scale-[0.97] ${on ? "border-gold/50 bg-gradient-to-b from-gold/25 to-gold/10 text-gold shadow-[0_0_20px_-6px_rgba(245,166,35,0.6)]" : "border-white/10 bg-white/[0.03] text-stone-300 hover:border-white/25 hover:text-white"}`}>{label}</button>
                         );
                       })}
                     </div>

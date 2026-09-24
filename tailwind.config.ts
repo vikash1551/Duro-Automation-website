@@ -5,8 +5,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        gold: "#c8a25f",
-        goldsoft: "#e2c893",
+        gold: "#F5A623",
+        goldsoft: "#F7B94D",
         ink: "#000000",
       },
       fontFamily: {

@@ -222,8 +222,8 @@ function TimelineNode({
   const fill = useTransform(progress, span, [0, 1]);
   const dotScale = useTransform(progress, span, [1, 1.25]);
   const numColor = useTransform(progress, span, [
-    "rgba(200,162,95,0.32)",
-    "rgba(200,162,95,0.95)",
+    "rgba(245,166,35,0.32)",
+    "rgba(245,166,35,0.95)",
   ]);
   return (
     <li className="relative pl-12 md:pl-16">
@@ -232,7 +232,7 @@ function TimelineNode({
       <span className="absolute inset-0 rounded-full bg-black ring-1 ring-white/25" />
         <motion.span
           style={{ opacity: fill, scale: dotScale }}
-          className="absolute inset-0 rounded-full bg-gold shadow-[0_0_12px_2px_rgba(200,162,95,0.45)]"
+          className="absolute inset-0 rounded-full bg-gold shadow-[0_0_12px_2px_rgba(245,166,35,0.45)]"
         />
       </span>
 
@@ -323,7 +323,7 @@ export default function SitePage() {
                 {...fadeUp}
                 whileHover={{ scale: 1.12, transition: { duration: 0.15 } }}
                 transition={{ ...fadeUp.transition, delay: 0.05 * i }}
-                className="relative cursor-default rounded-full border border-white/30 bg-white/[0.03] px-5 py-2.5 text-xs md:text-sm tracking-wide text-stone-200 transition-all duration-300 hover:z-10 hover:border-gold hover:bg-gold/10 hover:text-gold hover:ring-1 hover:ring-gold hover:shadow-[0_0_0_1px_rgba(200,162,95,0.7),0_0_10px_rgba(200,162,95,0.5)]"
+                className="relative cursor-default rounded-full border border-white/30 bg-white/[0.03] px-5 py-2.5 text-xs md:text-sm tracking-wide text-stone-200 transition-all duration-300 hover:z-10 hover:border-gold hover:bg-gold/10 hover:text-gold hover:ring-1 hover:ring-gold hover:shadow-[0_0_0_1px_rgba(245,166,35,0.7),0_0_10px_rgba(245,166,35,0.5)]"
               >
                 {b}
               </motion.span>
@@ -359,7 +359,7 @@ export default function SitePage() {
                   delay: (i % 3) * 0.08,
                   ease: [0.22, 1, 0.36, 1],
                 }}
-                className="group relative cursor-default rounded-2xl border border-white/[0.12] bg-black p-7 md:p-8 transition-all duration-300 hover:z-10 hover:border-gold hover:bg-gold/[0.06] hover:ring-1 hover:ring-gold hover:shadow-[0_0_0_2px_rgba(200,162,95,0.55),0_0_22px_rgba(200,162,95,0.55)]"
+                className="group relative cursor-default rounded-2xl border border-white/[0.12] bg-black p-7 md:p-8 transition-all duration-300 hover:z-10 hover:border-gold hover:bg-gold/[0.06] hover:ring-1 hover:ring-gold hover:shadow-[0_0_0_2px_rgba(245,166,35,0.55),0_0_22px_rgba(245,166,35,0.55)]"
               >
                 <div className="flex items-center gap-3 mb-3">
                   <span className="h-1.5 w-1.5 rounded-full bg-gold" />
@@ -397,7 +397,7 @@ export default function SitePage() {
               <span
                 key={i}
                 aria-hidden={i >= INDUSTRIES.length}
-                className="mx-1.5 md:mx-2 shrink-0 cursor-default whitespace-nowrap rounded-full border border-white/30 px-5 md:px-7 py-2.5 md:py-3 text-sm md:text-base tracking-wide text-stone-200 transition-all duration-300 hover:mx-5 hover:z-20 hover:scale-[1.18] hover:border-gold hover:bg-gold/10 hover:text-gold hover:shadow-[0_0_0_1px_rgba(200,162,95,0.9),0_0_7px_rgba(200,162,95,0.75),0_0_15px_rgba(200,162,95,0.45)]"
+                className="mx-1.5 md:mx-2 shrink-0 cursor-default whitespace-nowrap rounded-full border border-white/30 px-5 md:px-7 py-2.5 md:py-3 text-sm md:text-base tracking-wide text-stone-200 transition-all duration-300 hover:mx-5 hover:z-20 hover:scale-[1.18] hover:border-gold hover:bg-gold/10 hover:text-gold hover:shadow-[0_0_0_1px_rgba(245,166,35,0.9),0_0_7px_rgba(245,166,35,0.75),0_0_15px_rgba(245,166,35,0.45)]"
               >
                 {ind}
               </span>
@@ -428,7 +428,7 @@ export default function SitePage() {
                 key={i}
                 aria-hidden={i >= PARTNERS.length}
                 title={p.name}
-                className="group mx-1.5 md:mx-2 shrink-0 flex items-center justify-center cursor-default rounded-full border border-white/25 px-6 md:px-8 py-3 md:py-3.5 transition-all duration-300 hover:mx-5 hover:z-20 hover:scale-[1.18] hover:border-gold hover:bg-gold/10 hover:shadow-[0_0_0_1px_rgba(200,162,95,0.9),0_0_7px_rgba(200,162,95,0.75),0_0_15px_rgba(200,162,95,0.45)]"
+                className="group mx-1.5 md:mx-2 shrink-0 flex items-center justify-center cursor-default rounded-full border border-white/25 px-6 md:px-8 py-3 md:py-3.5 transition-all duration-300 hover:mx-5 hover:z-20 hover:scale-[1.18] hover:border-gold hover:bg-gold/10 hover:shadow-[0_0_0_1px_rgba(245,166,35,0.9),0_0_7px_rgba(245,166,35,0.75),0_0_15px_rgba(245,166,35,0.45)]"
               >
                 <img
                   src={`/partners/${p.slug}.png`}
@@ -508,9 +508,9 @@ export default function SitePage() {
                   delay: i * 0.1,
                   ease: [0.22, 1, 0.36, 1],
                 }}
-                className={`group relative flex flex-col rounded-2xl border p-7 md:p-8 transition-all duration-300 hover:z-10 hover:border-gold hover:shadow-[0_0_0_2px_rgba(200,162,95,0.6),0_0_28px_rgba(200,162,95,0.5)] ${
+                className={`group relative flex flex-col rounded-2xl border p-7 md:p-8 transition-all duration-300 hover:z-10 hover:border-gold hover:shadow-[0_0_0_2px_rgba(245,166,35,0.6),0_0_28px_rgba(245,166,35,0.5)] ${
                   plan.featured
-                    ? "border-gold/50 bg-gold/[0.05] ring-1 ring-gold/30 shadow-[0_0_20px_rgba(200,162,95,0.2)] md:-mt-5"
+                    ? "border-gold/50 bg-gold/[0.05] ring-1 ring-gold/30 shadow-[0_0_20px_rgba(245,166,35,0.2)] md:-mt-5"
                     : "border-white/[0.12] bg-black"
                 }`}
               >
@@ -608,15 +608,18 @@ export default function SitePage() {
           >
             <button
               onClick={openBookingModal}
-              className="rounded-full bg-gold text-black text-[12px] font-semibold uppercase tracking-[0.2em] px-9 py-4 hover:bg-goldsoft hover:shadow-[0_0_20px_rgba(200,162,95,0.4)] transition-all duration-300"
+              className="rounded-full bg-gold text-black text-[11px] md:text-[12px] font-semibold uppercase tracking-[0.2em] px-8 py-3.5 hover:bg-goldsoft hover:shadow-[0_0_20px_rgba(245,166,35,0.4)] transition-all duration-300"
             >
               Book Service
             </button>
             <a
-              href="mailto:duroautomation.sales@gmail.com"
+              href="https://mail.google.com/mail/?view=cm&fs=1&to=hello@duroautomation.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Send email via Gmail"
               className="text-[13px] tracking-[0.15em] text-stone-300 hover:text-gold transition-colors duration-300"
             >
-              duroautomation.sales@gmail.com
+              hello@duroautomation.com
             </a>
           </motion.div>
         </div>
@@ -625,15 +628,6 @@ export default function SitePage() {
       {/* ---------- Footer ---------- */}
       <footer className="bg-black px-6 md:px-16 py-14 border-t border-white/[0.06]">
         <div className="max-w-6xl mx-auto flex flex-col items-center gap-8">
-          {/* Brand */}
-          <div className="flex items-baseline gap-3">
-            <span className="font-display text-2xl font-semibold tracking-wide text-white">
-              DURO
-            </span>
-            <span className="text-[10px] font-light tracking-widest2 text-stone-400 uppercase">
-              Automation
-            </span>
-          </div>
 
           {/* Social Links */}
           <div className="flex flex-col items-center gap-4">
