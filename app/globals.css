@@ -136,7 +136,7 @@ body {
 
 /* ---------- smart-home controller (live 2D dashboard) ---------- */
 @keyframes duro-fan { to { transform: rotate(360deg); } }
-.duro-fan { animation: duro-fan 1.25s linear infinite; transform-origin: 50% 50%; }
+.duro-fan { animation: duro-fan 1.4s linear infinite; transform-origin: 0 0; }
 
 @keyframes duro-eq { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
 .duro-eq { animation: duro-eq 0.85s ease-in-out infinite; transform-origin: bottom; }
