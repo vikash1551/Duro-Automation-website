@@ -174,50 +174,38 @@ function registerPresentGuard(entry: ClipEntry) {
       cb: (now: number, md: { mediaTime: number }) => void
     ) => number;
   };
-  if (typeof v.requestVideoFrameCallback === "function") {
-    const onPresent = (_now: number, md: { mediaTime: number }) => {
-      const frame = Math.round(md.mediaTime * CLIP_FPS);
-      entry.presentedFrame = frame;
 
-      // Only upload this frame to the GPU if it's close to our seek target.
-      // Video decoders often briefly present stale keyframes (e.g. the gate
-      // at frame 0) during a seek — uploading those causes visible flashes.
-      const tgt = entry.seekingFrame;
-      if (tgt >= 0 && Math.abs(frame - tgt) <= CLIP_FPS) {
-        // Good frame — close to where we want to be
+  const processFrame = (frame: number) => {
+    entry.presentedFrame = frame;
+    const tgt = entry.seekingFrame;
+
+    // True keyframe-0 glitch: decoder flashed frame 0/1 while seeking deep into the clip (tgt > 12)
+    const isZeroFlash = tgt > 12 && frame <= 2;
+
+    if (tgt >= 0 && !isZeroFlash) {
+      entry.lastSeekedFrame = frame;
+      entry.texture.needsUpdate = true;
+      entry.staleFrames = 0;
+    } else if (tgt >= 0) {
+      entry.staleFrames++;
+      // Stale fallback: if decoder holds for too long, force-accept
+      if (entry.staleFrames > 4) {
         entry.lastSeekedFrame = frame;
         entry.texture.needsUpdate = true;
         entry.staleFrames = 0;
-      } else if (tgt >= 0) {
-        // Frame is too far from target — reject it, keep showing last good frame
-        entry.staleFrames++;
-        // Stale fallback: if decoder is stuck for too long, force-accept
-        // to prevent the video from appearing frozen (~0.6s at 24fps rVFC)
-        if (entry.staleFrames > 15) {
-          entry.lastSeekedFrame = frame;
-          entry.texture.needsUpdate = true;
-          entry.staleFrames = 0;
-        }
       }
-      // If tgt < 0 (no active seek / clip inactive), don't update anything —
-      // this prevents reset-seeks (to frame 0) from priming lastSeekedFrame
-      // which would let the clip display a stale frame when it reactivates.
+    }
+  };
 
+  if (typeof v.requestVideoFrameCallback === "function") {
+    const onPresent = (_now: number, md: { mediaTime: number }) => {
+      processFrame(Math.round(md.mediaTime * CLIP_FPS));
       v.requestVideoFrameCallback!(onPresent);
     };
     v.requestVideoFrameCallback(onPresent);
   } else {
     v.addEventListener("seeked", () => {
-      const frame = Math.round(v.currentTime * CLIP_FPS);
-      entry.presentedFrame = frame;
-      const tgt = entry.seekingFrame;
-      if (tgt >= 0 && (Math.abs(frame - tgt) <= CLIP_FPS || entry.staleFrames > 15)) {
-        entry.lastSeekedFrame = frame;
-        entry.texture.needsUpdate = true;
-        entry.staleFrames = 0;
-      } else if (tgt >= 0) {
-        entry.staleFrames++;
-      }
+      processFrame(Math.round(v.currentTime * CLIP_FPS));
     });
   }
 }
@@ -286,6 +274,9 @@ export default function Scene() {
       video.muted = true;
       video.playsInline = true;
       video.preload = "auto";
+      video.setAttribute("playsinline", "true");
+      video.setAttribute("webkit-playsinline", "true");
+      video.setAttribute("muted", "true");
       const texture = new THREE.VideoTexture(video);
       texture.colorSpace = THREE.NoColorSpace;
       texture.minFilter = THREE.LinearFilter;
@@ -350,6 +341,11 @@ export default function Scene() {
       c.staleFrames = 0;
       if (!c.video.src) {
         c.video.src = ROOMS[c.room].clip!;
+        c.video.muted = true;
+        c.video.playsInline = true;
+        c.video.setAttribute("playsinline", "true");
+        c.video.setAttribute("webkit-playsinline", "true");
+        c.video.setAttribute("muted", "true");
         c.video.addEventListener(
           "loadeddata",
           () => {
@@ -389,9 +385,9 @@ export default function Scene() {
     // clamp delta so a throttled/background tab can't fling the smoothers
     const dt = Math.min(delta, 1 / 20);
 
-    // Light render-side low-pass on scroll progress (~40ms time constant).
+    // High-responsiveness progress tracking: near-instantaneous tracking eliminates input lag
     const rawP = useJourney.getState().progress;
-    renderP.current += (rawP - renderP.current) * (1 - Math.exp(-dt / 0.04));
+    renderP.current += (rawP - renderP.current) * (1 - Math.exp(-dt / 0.008));
     const P = renderP.current;
     const s = Math.min(Math.floor(P), N_SEG - 1);
 
@@ -572,7 +568,7 @@ export default function Scene() {
       if (!isPrimary && !isReverse) {
         mesh.visible = false;
         u.uFade.value = 0;
-        if (ready && Math.abs(P - c.room) > 1.5 && c.video.currentTime > 0.1) {
+        if (ready && Math.abs(P - c.room) > 1.5 && !c.video.seeking && c.video.currentTime > 0.1) {
           try {
             c.video.currentTime = 0.03;
             c.seekingFrame = -1;
@@ -619,11 +615,24 @@ export default function Scene() {
       }
 
       const targetTime = Math.min(Math.max(target, 0.03), dur - 0.06);
-      // Always track what frame we WANT — the rVFC proximity guard uses this
-      // to reject stale decoder frames even before we issue the seek.
-      c.seekingFrame = Math.round(targetTime * CLIP_FPS);
-      if (!c.video.seeking && Math.abs(c.video.currentTime - targetTime) > 0.008) {
-        c.video.currentTime = targetTime;
+      const targetFrame = Math.round(targetTime * CLIP_FPS);
+      const quantTarget = targetFrame / CLIP_FPS;
+
+      // Mathematically optimal seek threshold:
+      // At 24 FPS (41.7ms/frame), seeking closer than ~0.029s yields 0 new visual frames
+      // but starves hardware decoders on mobile and laptop GPUs.
+      const frameStep = 1 / CLIP_FPS;
+      const timeDiff = Math.abs(c.video.currentTime - quantTarget);
+      // If decoder is currently seeking an older frame that is now > 4 frames stale, allow interrupting it
+      const isSeekingStale = c.video.seeking && timeDiff > frameStep * 4;
+
+      if ((!c.video.seeking || isSeekingStale) && timeDiff >= frameStep * 0.7) {
+        c.seekingFrame = targetFrame;
+        if ("fastSeek" in c.video && typeof (c.video as unknown as { fastSeek: (t: number) => void }).fastSeek === "function") {
+          (c.video as unknown as { fastSeek: (t: number) => void }).fastSeek(quantTarget);
+        } else {
+          c.video.currentTime = quantTarget;
+        }
       }
 
       // CRITICAL GUARD: keep fade = 0 until the clip has presented a real frame.

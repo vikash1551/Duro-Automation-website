@@ -33,11 +33,11 @@ export default function Experience() {
     window.scrollTo(0, 0);
 
     const lenis = new Lenis({
-      lerp: 0.10,
+      lerp: 0.12,
+      wheelMultiplier: 0.85,
       smoothWheel: true,
-      touchMultiplier: 1.6,
-      syncTouch: true,
-      syncTouchLerp: 0.06,
+      touchMultiplier: 1.0,
+      syncTouch: false,
     });
     lenis.scrollTo(0, { immediate: true, force: true });
     let zeroFrames = 0;
@@ -68,7 +68,10 @@ export default function Experience() {
       // that, translate the stage up 1:1 with further scrolling
       const over = Math.max(0, window.scrollY - (trackH - vh));
       if (stageRef.current) {
-        stageRef.current.style.transform = `translate3d(0, ${-over}px, 0)`;
+        const nextTransform = over > 0 ? `translate3d(0, ${-over}px, 0)` : "translate3d(0,0,0)";
+        if (stageRef.current.style.transform !== nextTransform) {
+          stageRef.current.style.transform = nextTransform;
+        }
       }
       // navbar turns black ONLY when the 3D house has completely scrolled off screen
       const pastHouse = over >= Math.max(1, vh - 30);
@@ -78,7 +81,7 @@ export default function Experience() {
 
     const tick = (time: number) => lenis.raf(time * 1000);
     gsap.ticker.add(tick);
-    gsap.ticker.lagSmoothing(0);
+    gsap.ticker.lagSmoothing(500, 33);
 
     const st = ScrollTrigger.create({
       trigger: trackRef.current,
@@ -111,6 +114,8 @@ export default function Experience() {
     };
 
     const onPointer = (e: PointerEvent) => {
+      // Ignore touch swipes so mobile thumb scrolling doesn't erratic-wobble the 3D perspective
+      if (e.pointerType === "touch") return;
       pointerState.x = e.clientX / window.innerWidth - 0.5;
       pointerState.y = e.clientY / window.innerHeight - 0.5;
     };
@@ -138,7 +143,7 @@ export default function Experience() {
         <Canvas
           flat
           linear
-          dpr={[1, 2]}
+          dpr={[1, 1.5]}
           gl={{ antialias: true, powerPreference: "high-performance" }}
           camera={{ position: [0, 0, 5], fov: 50 }}
         >

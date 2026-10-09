@@ -15,14 +15,14 @@ export default function Hud() {
 
   return (
     <div className="fixed inset-0 z-20 pointer-events-none">
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {phase === "dwell" && room < N_STOPS - 1 && !data.minor && (
           <motion.div
             key={`room-${room}`}
             initial={{ opacity: 0, y: 46 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -28 }}
-            transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, y: -20, transition: { duration: 0.25, ease: "easeOut" } }}
+            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             className={`absolute inset-x-0 px-6 md:px-16 ${
               isHero ? "bottom-[16vh]" : "top-1/2 -translate-y-1/2"
             }`}
@@ -87,8 +87,8 @@ export default function Hud() {
             key={`minor-${room}`}
             initial={{ opacity: 0, y: 26 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, y: -12, transition: { duration: 0.2, ease: "easeOut" } }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-x-0 bottom-[13vh] flex flex-col items-center text-center px-6"
           >
             <p className="text-[10px] uppercase tracking-widest2 text-gold mb-3">
@@ -119,8 +119,8 @@ export default function Hud() {
             key={`travel-${room}`}
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.7 }}
+            exit={{ opacity: 0, y: -10, transition: { duration: 0.18, ease: "easeOut" } }}
+            transition={{ duration: 0.5 }}
             className="absolute inset-x-0 bottom-[9vh] flex flex-col items-center gap-3"
           >
             <span className="h-8 w-px bg-gradient-to-b from-transparent via-gold/80 to-transparent" />
